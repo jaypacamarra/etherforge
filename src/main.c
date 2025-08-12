@@ -47,28 +47,26 @@ static void setup_signal_handlers(void) {
 }
 
 static void print_usage(const char *program_name) {
-    printf("EtherForged - EtherCAT Development Platform Daemon\n");
+    printf("EtherForged - EtherCAT Development Platform\n");
     printf("Usage: %s [OPTIONS]\n", program_name);
     printf("\nOptions:\n");
     printf("  -c, --config FILE    Configuration file path (default: /etc/etherforged/etherforged.yaml)\n");
     printf("  -i, --interface IF   Network interface name (overrides config)\n");
     printf("  -p, --port PORT      UDP port number (overrides config)\n");
-    printf("  -d, --daemon         Run as daemon (background process)\n");
-    printf("  -s, --stop           Stop running daemon instance\n");
     printf("  -v, --verbose        Enable verbose logging\n");
     printf("  -h, --help           Show this help message\n");
     printf("  --version            Show version information\n");
     printf("\nExamples:\n");
     printf("  %s --interface eth1                    # Use eth1 interface\n", program_name);
     printf("  %s --config /opt/etherforged.yaml     # Use custom config file\n", program_name);
-    printf("  %s --daemon --verbose                 # Run as daemon with verbose logging\n", program_name);
-    printf("  %s --stop                             # Stop running daemon\n", program_name);
+    printf("  %s --verbose --interface eth1         # Verbose logging\n", program_name);
+    printf("  nohup %s -i eth1 &                    # Run in background\n", program_name);
     printf("\nFor more information, visit: https://github.com/etherforge/etherforged\n");
 }
 
 static void print_version(void) {
     printf("EtherForged v1.0.0\n");
-    printf("EtherCAT Development Platform Daemon\n");
+    printf("EtherCAT Development Platform\n");
     printf("Built: %s %s\n", __DATE__, __TIME__);
     
 #ifdef HAVE_SOEM
@@ -102,82 +100,17 @@ static int drop_privileges(void) {
     return 0;
 }
 
-static int daemonize(void) {
-    pid_t pid = fork();
-    
-    if (pid < 0) {
-        LOG_ERROR("Fork failed: %s", strerror(errno));
-        return -1;
-    }
-    
-    if (pid > 0) {
-        printf("Daemon started with PID %d\n", pid);
-        exit(EXIT_SUCCESS);
-    }
-    
-    if (setsid() < 0) {
-        LOG_ERROR("setsid failed: %s", strerror(errno));
-        return -1;
-    }
-    
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
-    
-    pid = fork();
-    if (pid < 0) {
-        LOG_ERROR("Second fork failed: %s", strerror(errno));
-        return -1;
-    }
-    
-    if (pid > 0) {
-        exit(EXIT_SUCCESS);
-    }
-    
-    umask(0);
-    if (chdir("/") < 0) {
-        LOG_ERROR("Failed to change directory: %s", strerror(errno));
-    }
-    
-    // Close standard file descriptors but preserve PID file descriptor
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
-    
-    return 0;
-}
-
-static int stop_daemon(void) {
-    printf("Stopping etherforged daemon...\n");
-    
-    int result = system("pkill -TERM etherforged");
-    if (result == -1) {
-        fprintf(stderr, "Failed to execute pkill\n");
-        return -1;
-    }
-    
-    if (WEXITSTATUS(result) == 0) {
-        printf("Daemon stopped successfully\n");
-        return 0;
-    } else {
-        printf("No daemon running\n");
-        return 0;
-    }
-}
 
 int main(int argc, char *argv[]) {
     const char *config_file = "/etc/etherforged/etherforged.yaml";
     const char *interface_override = NULL;
     int port_override = -1;
-    bool daemon_mode = false;
     bool verbose = false;
-    bool stop_requested = false;
     
     static struct option long_options[] = {
         {"config",    required_argument, 0, 'c'},
         {"interface", required_argument, 0, 'i'},
         {"port",      required_argument, 0, 'p'},
-        {"daemon",    no_argument,       0, 'd'},
-        {"stop",      no_argument,       0, 's'},
         {"verbose",   no_argument,       0, 'v'},
         {"help",      no_argument,       0, 'h'},
         {"version",   no_argument,       0, 'V'},
@@ -185,7 +118,7 @@ int main(int argc, char *argv[]) {
     };
     
     int c;
-    while ((c = getopt_long(argc, argv, "c:i:p:dsvhV", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "c:i:p:vhV", long_options, NULL)) != -1) {
         switch (c) {
             case 'c':
                 config_file = optarg;
@@ -199,12 +132,6 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "Invalid port number: %s\n", optarg);
                     return EXIT_FAILURE;
                 }
-                break;
-            case 'd':
-                daemon_mode = true;
-                break;
-            case 's':
-                stop_requested = true;
                 break;
             case 'v':
                 verbose = true;
@@ -221,18 +148,12 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    // Handle stop request before initializing logging
-    if (stop_requested) {
-        return stop_daemon() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
-    }
-    
-    if (logging_init(daemon_mode ? "/var/log/etherforged.log" : "console", 
-                     verbose ? "debug" : "info") < 0) {
+    if (logging_init("console", verbose ? "debug" : "info") < 0) {
         fprintf(stderr, "Failed to initialize logging\n");
         return EXIT_FAILURE;
     }
     
-    LOG_INFO("EtherForged daemon starting");
+    LOG_INFO("EtherForged starting");
     print_version();
     
     if (daemon_init(&g_daemon_ctx, config_file) < 0) {
@@ -253,12 +174,6 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    if (daemon_acquire_lock(&g_daemon_ctx) < 0) {
-        LOG_ERROR("Failed to acquire single instance lock");
-        daemon_cleanup(&g_daemon_ctx);
-        return EXIT_FAILURE;
-    }
-    
     if (port_override > 0) {
         g_daemon_ctx.config.security.port = port_override;
         LOG_INFO("Port override: %d", port_override);
@@ -266,38 +181,28 @@ int main(int argc, char *argv[]) {
     
     if (geteuid() == 0) {
         LOG_WARN("Running as root - this may be required for EtherCAT access");
-        if (!daemon_mode) {
-            LOG_WARN("Consider running with --daemon for production use");
-        }
     }
     
     setup_signal_handlers();
     
-    if (daemon_mode) {
-        if (daemonize() < 0) {
-            LOG_ERROR("Failed to daemonize");
-            return EXIT_FAILURE;
-        }
-    }
-    
     if (daemon_start(&g_daemon_ctx) < 0) {
-        LOG_ERROR("Failed to start daemon");
+        LOG_ERROR("Failed to start service");
         daemon_cleanup(&g_daemon_ctx);
         return EXIT_FAILURE;
     }
     
-    LOG_INFO("Daemon running - waiting for signals");
+    LOG_INFO("EtherForged service running - press Ctrl+C to stop");
     
     while (!g_shutdown) {
         sleep(1);
     }
     
-    LOG_INFO("Shutting down daemon...");
+    LOG_INFO("Shutting down service...");
     daemon_stop(&g_daemon_ctx);
     daemon_cleanup(&g_daemon_ctx);
     
     logging_cleanup();
     
-    LOG_INFO("EtherForged daemon stopped");
+    LOG_INFO("EtherForged stopped");
     return EXIT_SUCCESS;
 }
