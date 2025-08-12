@@ -1,6 +1,6 @@
 # EtherForge
 
-EtherForge is an open-source EtherCAT daemon that provides a modern, unified interface for EtherCAT network control, monitoring, and development. Built as the foundation of the EtherForge ecosystem, it bridges the gap between low-level EtherCAT master libraries and high-level automation applications.
+EtherForge is an open-source EtherCAT master backend that provides a modern, unified interface for EtherCAT network control, monitoring, and development. Built as the foundation of the EtherForge ecosystem, it bridges the gap between low-level EtherCAT master libraries and high-level automation applications.
 
 ## Features
 
@@ -58,11 +58,6 @@ EtherForge is an open-source EtherCAT daemon that provides a modern, unified int
    sudo ./build/etherforged --interface eth1 --verbose
    ```
 
-4. **Run as daemon:**
-   ```bash
-   sudo ./build/etherforged --daemon --interface eth1
-   ```
-
 ## Configuration
 
 ### Configuration File
@@ -99,7 +94,6 @@ Options:
   -c, --config FILE    Configuration file path
   -i, --interface IF   Network interface name (overrides config)
   -p, --port PORT      UDP port number (overrides config)
-  -d, --daemon         Run as daemon (background process)
   -v, --verbose        Enable verbose logging
   -h, --help           Show help message
   --version            Show version information
@@ -158,7 +152,7 @@ typedef struct {
 import socket
 import struct
 
-# Connect to daemon
+# Connect to ethercatforge instance
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_address = ('localhost', 2346)
 
@@ -186,7 +180,7 @@ print(f"Response: status={status}, error={error_code}")
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-// Create socket and connect to daemon
+// Create socket and connect to etherforge
 int sock = socket(AF_INET, SOCK_DGRAM, 0);
 struct sockaddr_in server_addr = {
     .sin_family = AF_INET,
@@ -344,8 +338,7 @@ tail -f /var/log/etherforged.log
 
 ## License
 
-- **Core daemon**: GPL v3
-- **Client libraries**: MIT License
+- MIT License
 
 ## Contributing
 
