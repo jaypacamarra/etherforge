@@ -1,0 +1,380 @@
+# EtherForged: EtherCAT Development Platform
+
+## Overview
+
+EtherForged is an open-source EtherCAT daemon that provides a modern, unified interface for EtherCAT network control, monitoring, and development. Built as the foundation of the EtherForge ecosystem, it bridges the gap between low-level EtherCAT master libraries and high-level automation applications.
+
+## Architecture
+
+### Core Design Philosophy
+
+EtherForged follows the OpenOCD model - acting as a daemon that manages EtherCAT hardware and provides services to multiple client applications through a network protocol. This enables:
+
+- **Hardware abstraction**: Single interface across different EtherCAT master implementations
+- **Multi-client support**: Multiple applications can access the same EtherCAT network simultaneously
+- **Remote access**: Control EtherCAT networks over network connections
+- **Language agnostic**: Client libraries in any programming language
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Client Applications                       │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│   CLI Client    │  Python Library │    TUI Application      │
+│   (etherforge)  │  (pyetherforge) │    (ratatui-based)      │
+└─────────────────┴─────────────────┴─────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │   UDP Protocol    │
+                    │    Port 2346      │
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │   EtherForged     │
+                    │     Daemon        │
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │  EtherCAT Master  │
+                    │     (SOEM)        │
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │  EtherCAT Network │
+                    │  (Industrial I/O) │
+                    └───────────────────┘
+```
+
+## Core Features
+
+### Network Management
+- **Automatic slave discovery**: Scan and enumerate EtherCAT slaves
+- **Network state control**: Manage EtherCAT network states (INIT/PREOP/SAFEOP/OP)
+- **Topology mapping**: Understand and visualize network layout
+- **Hot-plug detection**: Detect slaves being added or removed
+
+### Real-Time PDO Operations
+- **High-frequency PDO access**: 1-4kHz PDO read/write operations via UDP
+- **Lock-free data structures**: Zero-copy access to real-time process data
+- **Streaming capabilities**: Continuous PDO monitoring with minimal latency
+- **Batch operations**: Multiple PDO operations in single network transaction
+
+### Network Diagnostics
+- **Timing analysis**: Cycle time measurement with microsecond precision
+- **Performance monitoring**: Jitter, frame loss, and latency tracking
+- **Error detection**: Comprehensive error logging and recovery
+- **Health assessment**: Network and slave status monitoring
+
+### Configuration Management
+- **Device templates**: Pre-configured settings for common industrial devices
+- **Network layouts**: Save and restore complete network configurations
+- **Validation**: Configuration validation before deployment
+- **Version control**: Track changes to network configurations
+
+## Communication Protocol
+
+### UDP-Based Protocol
+EtherForged uses a lightweight UDP protocol for all communication, optimized for real-time performance:
+
+#### Command Structure
+```c
+typedef struct {
+    uint32_t magic;        // 0xEF000001 (Protocol identifier)
+    uint8_t command_type;  // Command category
+    uint8_t command_id;    // Specific operation
+    uint16_t payload_len;  // Data length
+    uint8_t payload[8];    // Command-specific data
+} udp_command_t;
+```
+
+#### Response Structure
+```c
+typedef struct {
+    uint32_t magic;        // 0xEF800001 (Response identifier)
+    uint8_t status;        // SUCCESS=0, ERROR=1
+    uint8_t error_code;    // Specific error if failed
+    uint16_t payload_len;  // Response data length
+    uint8_t payload[8];    // Response data
+} udp_response_t;
+```
+
+### Command Categories
+
+#### Network Commands (0x01)
+- `NET_START` (0x01): Initialize EtherCAT network
+- `NET_STOP` (0x02): Shutdown network gracefully
+- `NET_SCAN` (0x03): Discover and enumerate slaves
+- `NET_STATUS` (0x04): Get current network status
+
+#### PDO Commands (0x02)
+- `PDO_READ` (0x01): Read process data from slave
+- `PDO_WRITE` (0x02): Write process data to slave
+- `PDO_MONITOR` (0x03): Start real-time monitoring
+- `PDO_STOP_MON` (0x04): Stop monitoring
+
+#### Diagnostic Commands (0x03)
+- `DIAG_NETWORK` (0x01): Get network health metrics
+- `DIAG_TIMING` (0x02): Get timing analysis data
+- `DIAG_ERRORS` (0x03): Get error history
+- `DIAG_SLAVE` (0x04): Get individual slave diagnostics
+
+## Implementation Details
+
+### Multi-Threading Architecture
+
+EtherForged uses a carefully designed multi-threaded architecture to maintain real-time performance:
+
+#### Real-Time Thread
+- **Priority**: Real-time priority (typically 99)
+- **CPU Affinity**: Dedicated CPU core
+- **Responsibilities**: EtherCAT cycle processing, PDO data exchange
+- **Timing**: 250μs to 10ms cycles (configurable)
+
+#### Network Thread
+- **Priority**: Normal priority
+- **Responsibilities**: UDP packet processing, client communication
+- **Data Exchange**: Lock-free queues with RT thread
+
+#### Management Thread
+- **Priority**: Low priority
+- **Responsibilities**: Diagnostics, logging, configuration management
+- **Timing**: Non-critical background operations
+
+### Memory Management
+
+#### Lock-Free Data Structures
+```c
+// High-performance circular buffer for PDO data
+typedef struct {
+    volatile uint32_t write_idx;
+    volatile uint32_t read_idx;
+    pdo_data_t buffer[PDO_BUFFER_SIZE];
+    uint32_t mask;  // For fast modulo operations
+} pdo_buffer_t;
+```
+
+#### Pre-Allocated Pools
+- **Command queues**: Pre-allocated for zero-allocation operation
+- **Response buffers**: Reused to minimize garbage collection
+- **PDO data**: Circular buffers with configurable retention
+
+### SOEM Integration
+
+EtherForged wraps the Simple Open EtherCAT Master (SOEM) library:
+
+#### Hardware Abstraction Layer
+```c
+typedef struct {
+    char interface_name[32];
+    bool network_active;
+    uint32_t slave_count;
+    slave_info_t slaves[MAX_SLAVES];
+    uint8_t pdo_input[PDO_INPUT_SIZE];
+    uint8_t pdo_output[PDO_OUTPUT_SIZE];
+} ethercat_context_t;
+```
+
+#### SOEM Wrapper Functions
+- **Network initialization**: `ec_init()` wrapper with error handling
+- **Slave configuration**: Automatic slave enumeration and setup
+- **Process data**: Real-time PDO exchange with SOEM
+- **State management**: EtherCAT state machine coordination
+
+## Performance Specifications
+
+### Real-Time Performance
+- **Cycle Time**: 250μs to 10ms (configurable)
+- **Jitter**: <50μs maximum
+- **PDO Latency**: <500μs round-trip (local network)
+- **Command Response**: <100ms for non-RT operations
+
+### Scalability
+- **Maximum Slaves**: 65,535 (EtherCAT specification limit)
+- **Concurrent Clients**: 32 simultaneous connections
+- **Network Throughput**: 100MB/s sustained
+- **Memory Usage**: <100MB base + 1KB per slave
+
+### Network Requirements
+- **Bandwidth**: Minimal (64KB/s at 4kHz)
+- **Latency**: <1ms for local networks
+- **Packet Loss**: <0.1% acceptable
+- **Network Types**: Ethernet, WiFi (not recommended for RT)
+
+## Installation and Deployment
+
+### System Requirements
+
+#### Minimum Requirements
+- **OS**: Linux (Ubuntu 20.04+, RHEL 8+)
+- **CPU**: x86_64, dual-core 1GHz
+- **Memory**: 512MB RAM
+- **Network**: Gigabit Ethernet adapter
+- **Privileges**: Root access for network interface control
+
+#### Recommended Requirements
+- **OS**: Real-time Linux (RT_PREEMPT kernel)
+- **CPU**: x86_64, quad-core 2GHz+
+- **Memory**: 2GB RAM
+- **Network**: Dedicated EtherCAT network interface
+- **Storage**: SSD for logging and configuration
+
+### Installation Methods
+
+#### Package Installation
+```bash
+# Ubuntu/Debian
+sudo apt install etherforged
+
+# RHEL/CentOS
+sudo dnf install etherforged
+
+# Start daemon
+etherforged --if eth0
+```
+
+#### Source Installation
+```bash
+git clone https://github.com/etherforge/etherforged.git
+cd etherforged
+make dependencies
+make
+sudo make install
+```
+
+#### Container Deployment
+```bash
+docker run -d --name etherforged \
+  --privileged \
+  --net=host \
+  etherforge/daemon:latest \
+  --interface eth1
+```
+
+## Configuration
+
+### Daemon Configuration
+```yaml
+# /etc/etherforged/config.yaml
+network:
+  interface: "eth1"
+  cycle_time_us: 1000
+  timeout_ms: 1000
+
+performance:
+  rt_priority: 99
+  cpu_affinity: [2, 3]
+  buffer_size: 8192
+
+logging:
+  level: "info"
+  file: "/var/log/etherforged.log"
+  max_size: "100MB"
+
+security:
+  bind_address: "0.0.0.0"
+  port: 2346
+  max_clients: 32
+```
+
+## Client Applications
+
+### Command Line Interface
+```bash
+# Interactive mode
+$ etherforge
+(etherforge) network start
+(etherforge) scan
+(etherforge) pdo write 3 0 0xFF
+(etherforge) pdo read 2 0 1
+
+# Batch mode
+$ etherforge -c "network start"
+$ etherforge -c "pdo read 2 0 1"
+```
+
+### Python Library
+```python
+import etherforge
+
+# Connect to daemon
+client = etherforge.connect('localhost', 2346)
+
+# Network operations
+client.network_start()
+slaves = client.scan_slaves()
+
+# PDO operations
+client.pdo_write(slave=3, offset=0, data=0xFF)
+value = client.pdo_read(slave=2, offset=0, size=1)
+
+# Real-time monitoring
+def pdo_callback(slave, offset, data, timestamp):
+    print(f"Slave {slave}: 0x{data:08X}")
+
+client.pdo_monitor_start(slave=2, callback=pdo_callback)
+```
+
+### Terminal User Interface (TUI)
+- **Multi-tab interface**: Network, PDO Control, Diagnostics
+- **Real-time monitoring**: Live PDO data streams
+- **Interactive controls**: Keyboard-driven operation
+- **Visual feedback**: Gauges, charts, status indicators
+
+## Use Cases
+
+### Development and Testing
+- **Hardware-in-the-loop testing**: Automated test execution
+- **Network validation**: Configuration verification
+- **Performance optimization**: Timing and throughput analysis
+- **Regression testing**: Automated test suites
+
+### Production Monitoring
+- **Live diagnostics**: Real-time network health monitoring
+- **Predictive maintenance**: Early warning systems
+- **Performance tracking**: Long-term trend analysis
+- **Alarm management**: Integrated alert systems
+
+### Education and Training
+- **Learning platform**: Safe environment for experimentation
+- **Curriculum integration**: University automation courses
+- **Certification training**: Professional development programs
+- **Remote labs**: Distance learning capabilities
+
+## Future Development
+
+### Planned Features
+- **Multiple EtherCAT master support**: IgH, TwinCAT integration
+- **Advanced diagnostics**: Machine learning for anomaly detection
+- **Cloud connectivity**: Secure industrial IoT integration
+- **Safety functions**: Functional safety compliance features
+
+### Ecosystem Growth
+- **Device driver marketplace**: Community-contributed drivers
+- **Third-party integrations**: CAD, simulation, MES systems
+- **Commercial support**: Professional services and support
+- **Standardization**: Contributions to EtherCAT specification
+
+## Getting Started
+
+### Quick Start Guide
+1. **Install EtherForged**: Use package manager or build from source
+2. **Configure network**: Set EtherCAT interface in configuration
+3. **Start daemon**: `sudo systemctl start etherforged`
+4. **Connect client**: `etherforge` or use Python library
+5. **Scan network**: Discover connected slaves
+6. **Begin operations**: Read/write PDO data, monitor performance
+
+### Resources
+- **Documentation**: [docs.etherforge.org](https://docs.etherforge.org)
+- **Source Code**: [github.com/etherforge/etherforged](https://github.com/etherforge/etherforged)
+- **Community**: [forum.etherforge.org](https://forum.etherforge.org)
+- **Support**: [support@etherforge.org](mailto:support@etherforge.org)
+
+## Contributing
+
+EtherForged is an open-source project welcoming contributions from the automation community. Whether you're fixing bugs, adding features, creating device templates, or improving documentation, your contributions help advance industrial automation technology.
+
+**License**: GPL v3 (core daemon), MIT (client libraries)
+**Project Status**: Active development, seeking contributors
+**Governance**: Community-driven with technical steering committee
