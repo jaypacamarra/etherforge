@@ -6,18 +6,10 @@
 #include "daemon.h"
 
 #ifdef HAVE_SOEM
-#include "ethercat.h"
-#include "ethercattype.h"
-#include "ethercatbase.h"
-#include "ethercatmain.h"
-#include "ethercatdc.h"
-#include "ethercatcoe.h"
-#include "ethercatfoe.h"
-#include "ethercatsoe.h"
-#include "ethercatconfig.h"
-#include "ethercatprint.h"
+#include "soem/soem.h"
 #endif
 
+#ifndef HAVE_SOEM
 typedef enum {
     EC_STATE_NONE = 0,
     EC_STATE_INIT = 1,
@@ -25,6 +17,10 @@ typedef enum {
     EC_STATE_SAFEOP = 4,
     EC_STATE_OP = 8
 } ec_state_t;
+#else
+// Use SOEM's definitions
+typedef int ec_state_t;
+#endif
 
 typedef struct {
     uint32_t cycles_total;

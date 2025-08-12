@@ -195,30 +195,12 @@ int ethercat_start(ethercat_context_t *ctx) {
     
     LOG_INFO("STUB: Starting EtherCAT network on %s", ctx->interface_name);
     ctx->network_active = true;
-    ctx->slave_count = 3;
-    ctx->input_size = 64;
-    ctx->output_size = 64;
+    ctx->slave_count = 0;
+    ctx->input_size = 0;
+    ctx->output_size = 0;
     
-    ctx->pdo_input = malloc(ctx->input_size);
-    ctx->pdo_output = malloc(ctx->output_size);
-    
-    if (!ctx->pdo_input || !ctx->pdo_output) {
-        LOG_ERROR("Failed to allocate PDO memory");
-        return -1;
-    }
-    
-    memset(ctx->pdo_input, 0xAA, ctx->input_size);
-    memset(ctx->pdo_output, 0x55, ctx->output_size);
-    
-    for (uint32_t i = 0; i < ctx->slave_count && i < MAX_SLAVES; i++) {
-        ctx->slaves[i].slave_id = i + 1;
-        snprintf(ctx->slaves[i].name, sizeof(ctx->slaves[i].name), "StubSlave%u", i + 1);
-        ctx->slaves[i].vendor_id = 0x12345678;
-        ctx->slaves[i].product_code = 0x87654321;
-        ctx->slaves[i].online = true;
-        ctx->slaves[i].input_size = 8;
-        ctx->slaves[i].output_size = 8;
-    }
+    ctx->pdo_input = NULL;
+    ctx->pdo_output = NULL;
     
     LOG_INFO("STUB: EtherCAT network started with %u slaves", ctx->slave_count);
     return 0;
@@ -267,33 +249,20 @@ int ethercat_read_pdo(ethercat_context_t *ctx, uint32_t slave, uint32_t offset,
                      uint32_t size, uint32_t *value) {
     if (!ctx || !value || slave == 0 || slave > ctx->slave_count) return -1;
     
-    if (!ctx->network_active || !ctx->pdo_input) return -1;
+    if (!ctx->network_active) return -1;
     
-    if (offset + size > ctx->input_size) return -1;
-    
-    *value = 0;
-    memcpy(value, ctx->pdo_input + offset, (size > 4) ? 4 : size);
-    
-    LOG_DEBUG("STUB: PDO read slave=%u, offset=%u, size=%u, value=0x%08X", 
-              slave, offset, size, *value);
-    
-    return 0;
+    LOG_DEBUG("STUB: PDO read failed - no slaves available");
+    return -1;
 }
 
 int ethercat_write_pdo(ethercat_context_t *ctx, uint32_t slave, uint32_t offset,
                       uint32_t size, uint32_t value) {
     if (!ctx || slave == 0 || slave > ctx->slave_count) return -1;
     
-    if (!ctx->network_active || !ctx->pdo_output) return -1;
+    if (!ctx->network_active) return -1;
     
-    if (offset + size > ctx->output_size) return -1;
-    
-    memcpy(ctx->pdo_output + offset, &value, (size > 4) ? 4 : size);
-    
-    LOG_DEBUG("STUB: PDO write slave=%u, offset=%u, size=%u, value=0x%08X", 
-              slave, offset, size, value);
-    
-    return 0;
+    LOG_DEBUG("STUB: PDO write failed - no slaves available");
+    return -1;
 }
 
 int ethercat_stub_init(ethercat_context_t *ctx, const char *interface) {

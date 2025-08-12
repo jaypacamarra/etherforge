@@ -21,17 +21,32 @@ find_package(Threads REQUIRED)
 # Find yaml library
 pkg_check_modules(YAML REQUIRED yaml-0.1)
 
-# Find SOEM library (optional)
-find_path(SOEM_INCLUDE_DIR ethercat.h PATHS /usr/include/soem /usr/local/include/soem)
-find_library(SOEM_LIBRARY NAMES soem libsoem PATHS /usr/lib /usr/local/lib)
-
-if(SOEM_INCLUDE_DIR AND SOEM_LIBRARY)
-    message(STATUS "SOEM found: ${SOEM_LIBRARY}")
+# Build SOEM from submodule
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SOEM/CMakeLists.txt")
+    message(STATUS "Building SOEM from submodule")
+    
+    # Add SOEM subdirectory
+    add_subdirectory(third_party/SOEM)
+    
     set(HAVE_SOEM TRUE)
     add_compile_definitions(HAVE_SOEM)
+    set(SOEM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/SOEM/soem")
+    set(SOEM_LIBRARY soem)
+    
+    message(STATUS "SOEM support: ENABLED (built from source)")
 else()
-    message(WARNING "SOEM not found - EtherCAT functionality will be stubbed")
-    set(HAVE_SOEM FALSE)
+    # Fallback: try to find system SOEM
+    find_path(SOEM_INCLUDE_DIR ethercat.h PATHS /usr/include/soem /usr/local/include/soem)
+    find_library(SOEM_LIBRARY NAMES soem libsoem PATHS /usr/lib /usr/local/lib)
+
+    if(SOEM_INCLUDE_DIR AND SOEM_LIBRARY)
+        message(STATUS "SOEM found: ${SOEM_LIBRARY}")
+        set(HAVE_SOEM TRUE)
+        add_compile_definitions(HAVE_SOEM)
+    else()
+        message(WARNING "SOEM not found - EtherCAT functionality will be stubbed")
+        set(HAVE_SOEM FALSE)
+    endif()
 endif()
 
 # Include directories
@@ -47,10 +62,16 @@ set(SOURCES
     src/protocol.c
     src/network.c
     src/commands.c
-    src/ethercat.c
     src/config.c
     src/logging.c
 )
+
+# Add appropriate EtherCAT implementation
+if(HAVE_SOEM)
+    list(APPEND SOURCES src/ethercat_soem.c)
+else()
+    list(APPEND SOURCES src/ethercat.c)
+endif()
 
 # Create executable
 add_executable(etherforged ${SOURCES})
