@@ -26,25 +26,10 @@ void config_set_defaults(config_t *config) {
     config->security.max_clients = 16;
 }
 
-static int parse_yaml_value(yaml_parser_t *parser, const char *key, config_t *config) {
-    yaml_token_t token;
-    char value[256];
-    
-    if (!yaml_parser_scan(parser, &token)) {
-        return -1;
-    }
-    
-    if (token.type != YAML_SCALAR_TOKEN) {
-        yaml_token_delete(&token);
-        return -1;
-    }
-    
-    strncpy(value, (char*)token.data.scalar.value, sizeof(value) - 1);
-    value[sizeof(value) - 1] = '\0';
-    yaml_token_delete(&token);
-    
+static int parse_yaml_value(const char *key, const char *value, config_t *config) {
     if (strcmp(key, "interface") == 0) {
         strncpy(config->network.interface, value, sizeof(config->network.interface) - 1);
+        config->network.interface[sizeof(config->network.interface) - 1] = '\0';
     } else if (strcmp(key, "cycle_time_us") == 0) {
         config->network.cycle_time_us = (uint32_t)atol(value);
     } else if (strcmp(key, "timeout_ms") == 0) {
@@ -55,14 +40,26 @@ static int parse_yaml_value(yaml_parser_t *parser, const char *key, config_t *co
         config->performance.buffer_size = (uint32_t)atol(value);
     } else if (strcmp(key, "level") == 0) {
         strncpy(config->logging.level, value, sizeof(config->logging.level) - 1);
+        config->logging.level[sizeof(config->logging.level) - 1] = '\0';
     } else if (strcmp(key, "file") == 0) {
         strncpy(config->logging.file, value, sizeof(config->logging.file) - 1);
+        config->logging.file[sizeof(config->logging.file) - 1] = '\0';
+    } else if (strcmp(key, "max_size") == 0) {
+        strncpy(config->logging.max_size, value, sizeof(config->logging.max_size) - 1);
+        config->logging.max_size[sizeof(config->logging.max_size) - 1] = '\0';
     } else if (strcmp(key, "bind_address") == 0) {
         strncpy(config->security.bind_address, value, sizeof(config->security.bind_address) - 1);
+        config->security.bind_address[sizeof(config->security.bind_address) - 1] = '\0';
     } else if (strcmp(key, "port") == 0) {
         config->security.port = (uint16_t)atoi(value);
     } else if (strcmp(key, "max_clients") == 0) {
         config->security.max_clients = (uint32_t)atol(value);
+    } else if (strcmp(key, "cpu_affinity") == 0) {
+        // Handle cpu_affinity array parsing - simplified for now
+        config->performance.cpu_count = 1;
+        config->performance.cpu_affinity[0] = atoi(value);
+    } else {
+        return -1; // Unknown key
     }
     
     return 0;
@@ -91,7 +88,10 @@ int config_load(config_t *config, const char *filename) {
     yaml_parser_set_input_file(&parser, file);
     
     char current_key[64] = {0};
-    bool in_section = false;
+    char current_section[64] = {0};
+    bool expecting_value = false;
+    bool in_array = false;
+    int array_index = 0;
     
     do {
         if (!yaml_parser_scan(&parser, &token)) {
@@ -101,18 +101,70 @@ int config_load(config_t *config, const char *filename) {
         
         switch (token.type) {
             case YAML_KEY_TOKEN:
+                expecting_value = false;
                 break;
                 
-            case YAML_SCALAR_TOKEN:
-                if (!in_section) {
-                    strncpy(current_key, (char*)token.data.scalar.value, sizeof(current_key) - 1);
-                    in_section = true;
-                } else {
-                    if (parse_yaml_value(&parser, current_key, config) < 0) {
-                        LOG_WARN("Failed to parse config value for key: %s", current_key);
+            case YAML_VALUE_TOKEN:
+                expecting_value = true;
+                break;
+                
+            case YAML_FLOW_SEQUENCE_START_TOKEN:
+            case YAML_BLOCK_SEQUENCE_START_TOKEN:
+                in_array = true;
+                array_index = 0;
+                break;
+                
+            case YAML_FLOW_SEQUENCE_END_TOKEN:
+                in_array = false;
+                break;
+                
+            case YAML_SCALAR_TOKEN: {
+                char *scalar_value = (char*)token.data.scalar.value;
+                
+                if (!expecting_value) {
+                    // This is a key
+                    if (strlen(current_section) == 0) {
+                        // Top-level section name
+                        strncpy(current_section, scalar_value, sizeof(current_section) - 1);
+                        current_section[sizeof(current_section) - 1] = '\0';
+                    } else {
+                        // Key within a section
+                        strncpy(current_key, scalar_value, sizeof(current_key) - 1);
+                        current_key[sizeof(current_key) - 1] = '\0';
                     }
-                    in_section = false;
+                } else {
+                    // This is a value
+                    if (strcmp(current_key, "cpu_affinity") == 0 && in_array) {
+                        // Handle array values for cpu_affinity
+                        if (array_index < 8) {
+                            config->performance.cpu_affinity[array_index] = atoi(scalar_value);
+                            array_index++;
+                            config->performance.cpu_count = array_index;
+                        }
+                    } else {
+                        // Regular key-value pair
+                        if (parse_yaml_value(current_key, scalar_value, config) < 0) {
+                            LOG_DEBUG("Unknown config key: %s", current_key);
+                        }
+                    }
+                    expecting_value = false;
                 }
+                break;
+            }
+            
+            case YAML_BLOCK_MAPPING_START_TOKEN:
+                // Reset section when entering a new mapping
+                if (strlen(current_key) > 0) {
+                    strncpy(current_section, current_key, sizeof(current_section) - 1);
+                    current_section[sizeof(current_section) - 1] = '\0';
+                    current_key[0] = '\0';
+                }
+                break;
+                
+            case YAML_BLOCK_END_TOKEN:
+                // Reset section when exiting a mapping
+                current_section[0] = '\0';
+                current_key[0] = '\0';
                 break;
                 
             default:
