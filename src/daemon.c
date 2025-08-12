@@ -7,6 +7,8 @@
 #include <sys/time.h>
 #include <sched.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/un.h>
 
 static void set_thread_priority(int priority) {
     struct sched_param param;
@@ -131,6 +133,7 @@ int daemon_init(daemon_context_t *ctx, const char *config_file) {
     ctx->pdo_buffer.read_idx = 0;
     
     ctx->socket_fd = -1;
+    ctx->lock_fd = -1;
     ctx->threads_running = false;
     ctx->shutdown_requested = false;
     
@@ -202,5 +205,45 @@ void daemon_cleanup(daemon_context_t *ctx) {
     
     pthread_mutex_destroy(&ctx->client_lock);
     
+    daemon_release_lock(ctx);
+    
     LOG_INFO("Daemon cleaned up");
+}
+
+int daemon_acquire_lock(daemon_context_t *ctx) {
+    if (!ctx) return -1;
+    
+    ctx->lock_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (ctx->lock_fd < 0) {
+        LOG_ERROR("Failed to create lock socket: %s", strerror(errno));
+        return -1;
+    }
+    
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    memcpy(addr.sun_path, LOCK_SOCKET_NAME, sizeof(LOCK_SOCKET_NAME));
+    
+    if (bind(ctx->lock_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        if (errno == EADDRINUSE) {
+            LOG_ERROR("Another instance of etherforged is already running");
+        } else {
+            LOG_ERROR("Failed to bind lock socket: %s", strerror(errno));
+        }
+        close(ctx->lock_fd);
+        ctx->lock_fd = -1;
+        return -1;
+    }
+    
+    LOG_INFO("Acquired single instance lock");
+    return 0;
+}
+
+void daemon_release_lock(daemon_context_t *ctx) {
+    if (!ctx || ctx->lock_fd < 0) return;
+    
+    close(ctx->lock_fd);
+    ctx->lock_fd = -1;
+    
+    LOG_INFO("Released single instance lock");
 }

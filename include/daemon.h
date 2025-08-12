@@ -12,6 +12,7 @@
 
 #define MAX_CLIENTS 32
 #define MAX_SLAVES 256
+#define LOCK_SOCKET_NAME "\0etherforged_lock"
 #define PDO_BUFFER_SIZE 8192
 
 typedef struct {
@@ -51,6 +52,7 @@ typedef struct {
 
 typedef struct {
     int socket_fd;
+    int lock_fd;
     struct sockaddr_in bind_addr;
     client_info_t clients[MAX_CLIENTS];
     uint32_t client_count;
@@ -80,5 +82,9 @@ void* mgmt_thread_func(void *arg);
 
 int handle_client_command(daemon_context_t *ctx, const udp_command_t *cmd,
                          udp_response_t *resp, struct sockaddr_in *client_addr);
+
+// Single instance protection
+int daemon_acquire_lock(daemon_context_t *ctx);
+void daemon_release_lock(daemon_context_t *ctx);
 
 #endif

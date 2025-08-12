@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <pwd.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "daemon.h"
 #include "logging.h"
@@ -53,6 +54,7 @@ static void print_usage(const char *program_name) {
     printf("  -i, --interface IF   Network interface name (overrides config)\n");
     printf("  -p, --port PORT      UDP port number (overrides config)\n");
     printf("  -d, --daemon         Run as daemon (background process)\n");
+    printf("  -s, --stop           Stop running daemon instance\n");
     printf("  -v, --verbose        Enable verbose logging\n");
     printf("  -h, --help           Show this help message\n");
     printf("  --version            Show version information\n");
@@ -60,6 +62,7 @@ static void print_usage(const char *program_name) {
     printf("  %s --interface eth1                    # Use eth1 interface\n", program_name);
     printf("  %s --config /opt/etherforged.yaml     # Use custom config file\n", program_name);
     printf("  %s --daemon --verbose                 # Run as daemon with verbose logging\n", program_name);
+    printf("  %s --stop                             # Stop running daemon\n", program_name);
     printf("\nFor more information, visit: https://github.com/etherforge/etherforged\n");
 }
 
@@ -131,13 +134,34 @@ static int daemonize(void) {
     }
     
     umask(0);
-    chdir("/");
+    if (chdir("/") < 0) {
+        LOG_ERROR("Failed to change directory: %s", strerror(errno));
+    }
     
+    // Close standard file descriptors but preserve PID file descriptor
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
     
     return 0;
+}
+
+static int stop_daemon(void) {
+    printf("Stopping etherforged daemon...\n");
+    
+    int result = system("pkill -TERM etherforged");
+    if (result == -1) {
+        fprintf(stderr, "Failed to execute pkill\n");
+        return -1;
+    }
+    
+    if (WEXITSTATUS(result) == 0) {
+        printf("Daemon stopped successfully\n");
+        return 0;
+    } else {
+        printf("No daemon running\n");
+        return 0;
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -146,12 +170,14 @@ int main(int argc, char *argv[]) {
     int port_override = -1;
     bool daemon_mode = false;
     bool verbose = false;
+    bool stop_requested = false;
     
     static struct option long_options[] = {
         {"config",    required_argument, 0, 'c'},
         {"interface", required_argument, 0, 'i'},
         {"port",      required_argument, 0, 'p'},
         {"daemon",    no_argument,       0, 'd'},
+        {"stop",      no_argument,       0, 's'},
         {"verbose",   no_argument,       0, 'v'},
         {"help",      no_argument,       0, 'h'},
         {"version",   no_argument,       0, 'V'},
@@ -159,7 +185,7 @@ int main(int argc, char *argv[]) {
     };
     
     int c;
-    while ((c = getopt_long(argc, argv, "c:i:p:dvhV", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "c:i:p:dsvhV", long_options, NULL)) != -1) {
         switch (c) {
             case 'c':
                 config_file = optarg;
@@ -177,6 +203,9 @@ int main(int argc, char *argv[]) {
             case 'd':
                 daemon_mode = true;
                 break;
+            case 's':
+                stop_requested = true;
+                break;
             case 'v':
                 verbose = true;
                 break;
@@ -192,6 +221,11 @@ int main(int argc, char *argv[]) {
         }
     }
     
+    // Handle stop request before initializing logging
+    if (stop_requested) {
+        return stop_daemon() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+    
     if (logging_init(daemon_mode ? "/var/log/etherforged.log" : "console", 
                      verbose ? "debug" : "info") < 0) {
         fprintf(stderr, "Failed to initialize logging\n");
@@ -203,6 +237,12 @@ int main(int argc, char *argv[]) {
     
     if (daemon_init(&g_daemon_ctx, config_file) < 0) {
         LOG_ERROR("Failed to initialize daemon");
+        return EXIT_FAILURE;
+    }
+    
+    if (daemon_acquire_lock(&g_daemon_ctx) < 0) {
+        LOG_ERROR("Failed to acquire single instance lock");
+        daemon_cleanup(&g_daemon_ctx);
         return EXIT_FAILURE;
     }
     

@@ -21,10 +21,7 @@ static int setup_socket(daemon_context_t *ctx) {
         LOG_WARN("Failed to set socket non-blocking: %s", strerror(errno));
     }
     
-    int reuse = 1;
-    if (setsockopt(ctx->socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
-        LOG_WARN("Failed to set SO_REUSEADDR: %s", strerror(errno));
-    }
+    // Note: SO_REUSEADDR removed to prevent multiple daemon instances
     
     memset(&ctx->bind_addr, 0, sizeof(ctx->bind_addr));
     ctx->bind_addr.sin_family = AF_INET;
