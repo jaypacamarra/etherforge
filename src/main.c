@@ -240,16 +240,23 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     
-    if (daemon_acquire_lock(&g_daemon_ctx) < 0) {
-        LOG_ERROR("Failed to acquire single instance lock");
-        daemon_cleanup(&g_daemon_ctx);
-        return EXIT_FAILURE;
-    }
-    
     if (interface_override) {
         strncpy(g_daemon_ctx.config.network.interface, interface_override, 
                 sizeof(g_daemon_ctx.config.network.interface) - 1);
         LOG_INFO("Interface override: %s", interface_override);
+        
+        // Re-initialize EtherCAT with correct interface
+        ethercat_cleanup(&g_daemon_ctx.ec_ctx);
+        if (ethercat_init(&g_daemon_ctx.ec_ctx, g_daemon_ctx.config.network.interface) < 0) {
+            LOG_ERROR("Failed to re-initialize EtherCAT master with override interface");
+            return EXIT_FAILURE;
+        }
+    }
+    
+    if (daemon_acquire_lock(&g_daemon_ctx) < 0) {
+        LOG_ERROR("Failed to acquire single instance lock");
+        daemon_cleanup(&g_daemon_ctx);
+        return EXIT_FAILURE;
     }
     
     if (port_override > 0) {
