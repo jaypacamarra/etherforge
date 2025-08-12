@@ -47,10 +47,10 @@ static void setup_signal_handlers(void) {
 }
 
 static void print_usage(const char *program_name) {
-    printf("EtherForged - EtherCAT Development Platform\n");
+    printf("EtherForge - EtherCAT Development Platform\n");
     printf("Usage: %s [OPTIONS]\n", program_name);
     printf("\nOptions:\n");
-    printf("  -c, --config FILE    Configuration file path (default: /etc/etherforged/etherforged.yaml)\n");
+    printf("  -c, --config FILE    Configuration file path (default: /etc/etherforge/etherforge.yaml)\n");
     printf("  -i, --interface IF   Network interface name (overrides config)\n");
     printf("  -p, --port PORT      UDP port number (overrides config)\n");
     printf("  -v, --verbose        Enable verbose logging\n");
@@ -58,14 +58,14 @@ static void print_usage(const char *program_name) {
     printf("  --version            Show version information\n");
     printf("\nExamples:\n");
     printf("  %s --interface eth1                    # Use eth1 interface\n", program_name);
-    printf("  %s --config /opt/etherforged.yaml     # Use custom config file\n", program_name);
+    printf("  %s --config /opt/etherforge.yaml     # Use custom config file\n", program_name);
     printf("  %s --verbose --interface eth1         # Verbose logging\n", program_name);
     printf("  nohup %s -i eth1 &                    # Run in background\n", program_name);
-    printf("\nFor more information, visit: https://github.com/etherforge/etherforged\n");
+    printf("\nFor more information, visit: https://github.com/etherforge/etherforge\n");
 }
 
 static void print_version(void) {
-    printf("EtherForged v1.0.0\n");
+    printf("EtherForge v1.0.0\n");
     printf("EtherCAT Development Platform\n");
     printf("Built: %s %s\n", __DATE__, __TIME__);
     
@@ -102,7 +102,7 @@ static int drop_privileges(void) {
 
 
 int main(int argc, char *argv[]) {
-    const char *config_file = "/etc/etherforged/etherforged.yaml";
+    const char *config_file = "/etc/etherforge/etherforge.yaml";
     const char *interface_override = NULL;
     int port_override = -1;
     bool verbose = false;
@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     
-    LOG_INFO("EtherForged starting");
+    LOG_INFO("EtherForge starting");
     print_version();
     
     if (daemon_init(&g_daemon_ctx, config_file) < 0) {
@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     
-    LOG_INFO("EtherForged service running - press Ctrl+C to stop");
+    LOG_INFO("EtherForge service running - press Ctrl+C to stop");
     
     while (!g_shutdown) {
         sleep(1);
@@ -203,6 +203,6 @@ int main(int argc, char *argv[]) {
     
     logging_cleanup();
     
-    LOG_INFO("EtherForged stopped");
+    LOG_INFO("EtherForge stopped");
     return EXIT_SUCCESS;
 }

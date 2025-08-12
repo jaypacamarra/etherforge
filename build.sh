@@ -98,4 +98,4 @@ if [ "$INSTALL" = true ]; then
     print_status "Installation complete."
 fi
 
-print_status "Build complete! Executable: build/etherforged"
+print_status "Build complete! Executable: build/etherforge"

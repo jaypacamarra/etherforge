@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(etherforged VERSION 1.0.0 LANGUAGES C)
+project(etherforge VERSION 1.0.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -74,29 +74,29 @@ else()
 endif()
 
 # Create executable
-add_executable(etherforged ${SOURCES})
+add_executable(etherforge ${SOURCES})
 
 # Link libraries
-target_link_libraries(etherforged
+target_link_libraries(etherforge
     Threads::Threads
     rt
     ${YAML_LIBRARIES}
 )
 
 if(HAVE_SOEM)
-    target_link_libraries(etherforged ${SOEM_LIBRARY})
+    target_link_libraries(etherforge ${SOEM_LIBRARY})
 endif()
 
 # Include yaml compile flags
-target_compile_options(etherforged PRIVATE ${YAML_CFLAGS})
+target_compile_options(etherforge PRIVATE ${YAML_CFLAGS})
 
 # Install targets
-install(TARGETS etherforged
+install(TARGETS etherforge
     RUNTIME DESTINATION bin
 )
 
-install(FILES config/etherforged.yaml
-    DESTINATION /etc/etherforged
+install(FILES config/etherforge.yaml
+    DESTINATION /etc/etherforge
     OPTIONAL
 )
 

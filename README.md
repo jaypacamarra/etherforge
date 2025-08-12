@@ -1,6 +1,6 @@
-# EtherForged
+# EtherForge
 
-EtherForged is an open-source EtherCAT daemon that provides a modern, unified interface for EtherCAT network control, monitoring, and development. Built as the foundation of the EtherForge ecosystem, it bridges the gap between low-level EtherCAT master libraries and high-level automation applications.
+EtherForge is an open-source EtherCAT daemon that provides a modern, unified interface for EtherCAT network control, monitoring, and development. Built as the foundation of the EtherForge ecosystem, it bridges the gap between low-level EtherCAT master libraries and high-level automation applications.
 
 ## Features
 
@@ -67,7 +67,7 @@ EtherForged is an open-source EtherCAT daemon that provides a modern, unified in
 
 ### Configuration File
 
-EtherForged uses YAML configuration files. Default location: `/etc/etherforged/etherforged.yaml`
+EtherForge uses YAML configuration files. Default location: `/etc/etherforged/etherforged.yaml`
 
 Example configuration:
 ```yaml
@@ -107,7 +107,7 @@ Options:
 
 ## Protocol Overview
 
-EtherForged uses a UDP-based protocol for client communication:
+EtherForge uses a UDP-based protocol for client communication:
 
 ### Command Structure
 ```c
@@ -250,7 +250,7 @@ make
 sudo make install
 ```
 
-Then rebuild EtherForged to enable SOEM support.
+Then rebuild EtherForge to enable SOEM support.
 
 ### Project Structure
 
@@ -372,4 +372,4 @@ tail -f /var/log/etherforged.log
 
 ---
 
-**EtherForged** - Empowering Industrial Automation Development
+**EtherForge** - Empowering Industrial Automation Development
