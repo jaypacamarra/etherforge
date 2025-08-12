@@ -1,5 +1,5 @@
-#ifndef DAEMON_H
-#define DAEMON_H
+#ifndef SERVICE_H
+#define SERVICE_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -67,18 +67,18 @@ typedef struct {
     config_t config;
     
     volatile bool shutdown_requested;
-} daemon_context_t;
+} service_context_t;
 
-int daemon_init(daemon_context_t *ctx, const char *config_file);
-int daemon_start(daemon_context_t *ctx);
-void daemon_stop(daemon_context_t *ctx);
-void daemon_cleanup(daemon_context_t *ctx);
+int service_init(service_context_t *ctx, const char *config_file);
+int service_start(service_context_t *ctx);
+void service_stop(service_context_t *ctx);
+void service_cleanup(service_context_t *ctx);
 
 void* network_thread_func(void *arg);
 void* rt_thread_func(void *arg);
 void* mgmt_thread_func(void *arg);
 
-int handle_client_command(daemon_context_t *ctx, const udp_command_t *cmd,
+int handle_client_command(service_context_t *ctx, const udp_command_t *cmd,
                          udp_response_t *resp, struct sockaddr_in *client_addr);
 
 

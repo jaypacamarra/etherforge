@@ -1,4 +1,4 @@
-#include "daemon.h"
+#include "service.h"
 #include "logging.h"
 #include "ethercat.h"
 #include <string.h>
@@ -39,7 +39,7 @@ static void set_thread_affinity(const int *cpus, int count) {
 }
 
 void* rt_thread_func(void *arg) {
-    daemon_context_t *ctx = (daemon_context_t*)arg;
+    service_context_t *ctx = (service_context_t*)arg;
     
     LOG_INFO("Real-time thread starting");
     
@@ -81,7 +81,7 @@ void* rt_thread_func(void *arg) {
 }
 
 void* mgmt_thread_func(void *arg) {
-    daemon_context_t *ctx = (daemon_context_t*)arg;
+    service_context_t *ctx = (service_context_t*)arg;
     
     LOG_INFO("Management thread starting");
     
@@ -104,10 +104,10 @@ void* mgmt_thread_func(void *arg) {
     return NULL;
 }
 
-int daemon_init(daemon_context_t *ctx, const char *config_file) {
+int service_init(service_context_t *ctx, const char *config_file) {
     if (!ctx) return -1;
     
-    memset(ctx, 0, sizeof(daemon_context_t));
+    memset(ctx, 0, sizeof(service_context_t));
     
     if (config_load(&ctx->config, config_file) < 0) {
         LOG_ERROR("Failed to load configuration");
@@ -134,11 +134,11 @@ int daemon_init(daemon_context_t *ctx, const char *config_file) {
     ctx->threads_running = false;
     ctx->shutdown_requested = false;
     
-    LOG_INFO("Daemon initialized");
+    LOG_INFO("Service initialized");
     return 0;
 }
 
-int daemon_start(daemon_context_t *ctx) {
+int service_start(service_context_t *ctx) {
     if (!ctx) return -1;
     
     ctx->threads_running = true;
@@ -163,14 +163,14 @@ int daemon_start(daemon_context_t *ctx) {
         return -1;
     }
     
-    LOG_INFO("Daemon started - all threads running");
+    LOG_INFO("Service started - all threads running");
     return 0;
 }
 
-void daemon_stop(daemon_context_t *ctx) {
+void service_stop(service_context_t *ctx) {
     if (!ctx) return;
     
-    LOG_INFO("Stopping daemon...");
+    LOG_INFO("Stopping service...");
     
     ctx->shutdown_requested = true;
     ctx->threads_running = false;
@@ -190,7 +190,7 @@ void daemon_stop(daemon_context_t *ctx) {
     LOG_INFO("All threads stopped");
 }
 
-void daemon_cleanup(daemon_context_t *ctx) {
+void service_cleanup(service_context_t *ctx) {
     if (!ctx) return;
     
     ethercat_cleanup(&ctx->ec_ctx);

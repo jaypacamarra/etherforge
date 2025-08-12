@@ -1,4 +1,4 @@
-#include "daemon.h"
+#include "service.h"
 #include "protocol.h"
 #include "logging.h"
 #include <sys/socket.h>
@@ -9,7 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 
-static int setup_socket(daemon_context_t *ctx) {
+static int setup_socket(service_context_t *ctx) {
     ctx->socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (ctx->socket_fd < 0) {
         LOG_ERROR("Failed to create UDP socket: %s", strerror(errno));
@@ -21,7 +21,7 @@ static int setup_socket(daemon_context_t *ctx) {
         LOG_WARN("Failed to set socket non-blocking: %s", strerror(errno));
     }
     
-    // Note: SO_REUSEADDR removed to prevent multiple daemon instances
+    // Note: SO_REUSEADDR removed to prevent multiple service instances
     
     memset(&ctx->bind_addr, 0, sizeof(ctx->bind_addr));
     ctx->bind_addr.sin_family = AF_INET;
@@ -45,7 +45,7 @@ static int setup_socket(daemon_context_t *ctx) {
     return 0;
 }
 
-static void add_client(daemon_context_t *ctx, struct sockaddr_in *client_addr) {
+static void add_client(service_context_t *ctx, struct sockaddr_in *client_addr) {
     pthread_mutex_lock(&ctx->client_lock);
     
     for (uint32_t i = 0; i < MAX_CLIENTS; i++) {
@@ -70,7 +70,7 @@ static void add_client(daemon_context_t *ctx, struct sockaddr_in *client_addr) {
     pthread_mutex_unlock(&ctx->client_lock);
 }
 
-static void update_client(daemon_context_t *ctx, struct sockaddr_in *client_addr) {
+static void update_client(service_context_t *ctx, struct sockaddr_in *client_addr) {
     pthread_mutex_lock(&ctx->client_lock);
     
     for (uint32_t i = 0; i < ctx->client_count; i++) {
@@ -86,7 +86,7 @@ static void update_client(daemon_context_t *ctx, struct sockaddr_in *client_addr
     add_client(ctx, client_addr);
 }
 
-static void cleanup_stale_clients(daemon_context_t *ctx) {
+static void cleanup_stale_clients(service_context_t *ctx) {
     uint32_t current_time = time(NULL);
     const uint32_t timeout = 300;
     
@@ -113,7 +113,7 @@ static void cleanup_stale_clients(daemon_context_t *ctx) {
 }
 
 void* network_thread_func(void *arg) {
-    daemon_context_t *ctx = (daemon_context_t*)arg;
+    service_context_t *ctx = (service_context_t*)arg;
     
     if (setup_socket(ctx) < 0) {
         LOG_ERROR("Network thread failed to initialize");

@@ -1,11 +1,11 @@
-#include "daemon.h"
+#include "service.h"
 #include "protocol.h"
 #include "ethercat.h"
 #include "logging.h"
 #include <string.h>
 #include <arpa/inet.h>
 
-static int handle_network_command(daemon_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
+static int handle_network_command(service_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
     switch (cmd->command_id) {
         case NET_START: {
             LOG_INFO("Network start command received");
@@ -70,7 +70,7 @@ static int handle_network_command(daemon_context_t *ctx, const udp_command_t *cm
     return 0;
 }
 
-static int handle_pdo_command(daemon_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
+static int handle_pdo_command(service_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
     if (!ctx->ec_ctx.network_active) {
         protocol_create_response(resp, STATUS_ERROR, ERR_NETWORK_NOT_READY, NULL, 0);
         return 0;
@@ -128,7 +128,7 @@ static int handle_pdo_command(daemon_context_t *ctx, const udp_command_t *cmd, u
     return 0;
 }
 
-static int handle_diagnostic_command(daemon_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
+static int handle_diagnostic_command(service_context_t *ctx, const udp_command_t *cmd, udp_response_t *resp) {
     switch (cmd->command_id) {
         case DIAG_NETWORK: {
             LOG_DEBUG("Network diagnostics requested");
@@ -189,7 +189,7 @@ static int handle_diagnostic_command(daemon_context_t *ctx, const udp_command_t 
     return 0;
 }
 
-int handle_client_command(daemon_context_t *ctx, const udp_command_t *cmd,
+int handle_client_command(service_context_t *ctx, const udp_command_t *cmd,
                          udp_response_t *resp, struct sockaddr_in *client_addr) {
     (void)client_addr;
     

@@ -9,11 +9,11 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include "daemon.h"
+#include "service.h"
 #include "logging.h"
 #include "config.h"
 
-static daemon_context_t g_daemon_ctx;
+static service_context_t g_service_ctx;
 static volatile sig_atomic_t g_shutdown = 0;
 
 static void signal_handler(int signum) {
@@ -22,7 +22,7 @@ static void signal_handler(int signum) {
         case SIGTERM:
             LOG_INFO("Received signal %d, shutting down", signum);
             g_shutdown = 1;
-            g_daemon_ctx.shutdown_requested = true;
+            g_service_ctx.shutdown_requested = true;
             break;
         case SIGHUP:
             LOG_INFO("Received SIGHUP, ignoring");
@@ -76,7 +76,7 @@ static void print_version(void) {
 #endif
     
     printf("Protocol Version: 1.0\n");
-    printf("License: GPL v3 (core daemon), MIT (client libraries)\n");
+    printf("License: GPL v3 (core service), MIT (client libraries)\n");
 }
 
 static int drop_privileges(void) {
@@ -156,26 +156,26 @@ int main(int argc, char *argv[]) {
     LOG_INFO("EtherForge starting");
     print_version();
     
-    if (daemon_init(&g_daemon_ctx, config_file) < 0) {
-        LOG_ERROR("Failed to initialize daemon");
+    if (service_init(&g_service_ctx, config_file) < 0) {
+        LOG_ERROR("Failed to initialize serivce");
         return EXIT_FAILURE;
     }
     
     if (interface_override) {
-        strncpy(g_daemon_ctx.config.network.interface, interface_override, 
-                sizeof(g_daemon_ctx.config.network.interface) - 1);
+        strncpy(g_service_ctx.config.network.interface, interface_override, 
+                sizeof(g_service_ctx.config.network.interface) - 1);
         LOG_INFO("Interface override: %s", interface_override);
         
         // Re-initialize EtherCAT with correct interface
-        ethercat_cleanup(&g_daemon_ctx.ec_ctx);
-        if (ethercat_init(&g_daemon_ctx.ec_ctx, g_daemon_ctx.config.network.interface) < 0) {
+        ethercat_cleanup(&g_service_ctx.ec_ctx);
+        if (ethercat_init(&g_service_ctx.ec_ctx, g_service_ctx.config.network.interface) < 0) {
             LOG_ERROR("Failed to re-initialize EtherCAT master with override interface");
             return EXIT_FAILURE;
         }
     }
     
     if (port_override > 0) {
-        g_daemon_ctx.config.security.port = port_override;
+        g_service_ctx.config.security.port = port_override;
         LOG_INFO("Port override: %d", port_override);
     }
     
@@ -185,9 +185,9 @@ int main(int argc, char *argv[]) {
     
     setup_signal_handlers();
     
-    if (daemon_start(&g_daemon_ctx) < 0) {
+    if (service_start(&g_service_ctx) < 0) {
         LOG_ERROR("Failed to start service");
-        daemon_cleanup(&g_daemon_ctx);
+        service_cleanup(&g_service_ctx);
         return EXIT_FAILURE;
     }
     
@@ -198,8 +198,8 @@ int main(int argc, char *argv[]) {
     }
     
     LOG_INFO("Shutting down service...");
-    daemon_stop(&g_daemon_ctx);
-    daemon_cleanup(&g_daemon_ctx);
+    service_stop(&g_service_ctx);
+    service_cleanup(&g_service_ctx);
     
     logging_cleanup();
     

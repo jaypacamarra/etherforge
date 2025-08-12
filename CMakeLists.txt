@@ -58,7 +58,7 @@ endif()
 # Source files
 set(SOURCES
     src/main.c
-    src/daemon.c
+    src/service.c
     src/protocol.c
     src/network.c
     src/commands.c

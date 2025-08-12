@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "daemon.h"
+#include "service.h"
 
 #ifdef HAVE_SOEM
 #include "soem/soem.h"
