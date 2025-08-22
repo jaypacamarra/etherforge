@@ -6,7 +6,7 @@
 
 #define PROTOCOL_MAGIC_CMD      0xEF000001
 #define PROTOCOL_MAGIC_RESP     0xEF800001
-#define PROTOCOL_MAX_PAYLOAD    8
+#define PROTOCOL_MAX_PAYLOAD    32
 #define PROTOCOL_PORT           2346
 
 typedef enum {

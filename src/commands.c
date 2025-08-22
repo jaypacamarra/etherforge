@@ -56,9 +56,10 @@ static int handle_network_command(service_context_t *ctx, const udp_command_t *c
             status.cycle_time_us = ctx->config.network.cycle_time_us;
             status.error_count = 0;
             
-            uint8_t payload[8];
+            uint8_t payload[17];
+            memset(payload, 0, sizeof(payload));
             protocol_pack_network_status(&status, payload);
-            protocol_create_response(resp, STATUS_SUCCESS, ERR_NONE, payload, 8);
+            protocol_create_response(resp, STATUS_SUCCESS, ERR_NONE, payload, 17);
             break;
         }
         

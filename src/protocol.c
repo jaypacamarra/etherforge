@@ -76,7 +76,9 @@ void protocol_pack_network_status(const network_status_t *status, uint8_t *paylo
     
     uint32_t *payload32 = (uint32_t *)payload;
     payload32[0] = htonl(status->slave_count);
-    payload32[1] = htonl(status->network_active ? 1 : 0);
+    payload[4] = status->network_active ? 1 : 0;
+    payload32[2] = htonl(status->cycle_time_us);
+    payload32[3] = htonl(status->error_count);
 }
 
 void protocol_pack_pdo_response(uint32_t value, uint8_t *payload) {
